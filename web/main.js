@@ -99,9 +99,6 @@ function onRuleChange(){
 				.then(r => r.text())
 				.then(r => g_codeEditor.setValue(r))
 		default:
-			fetch("../rules/VIRTUAL16.asm")
-				.then(r => r.text())
-				.then(r => g_codeEditor.setValue(r))
 			break;
 	}
 	g_codeEditor.refresh()
