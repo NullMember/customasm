@@ -10,6 +10,7 @@ function main()
 	document.body.onresize = onResize
 	window.onkeydown = onKeyDown
 	window.onbeforeunload = onBeforeUnload
+	document.getElementById("selectRule").onchange = onRuleChange
 	
 	fetch("customasm.gc.wasm")
 		.then(r => r.arrayBuffer())
@@ -31,7 +32,7 @@ function setupEditor()
 		tabSize: 4, indentUnit: 4, mode: "z80"
 	})
 	
-	fetch("../examples/basic.asm")
+	fetch("../rules/VIRTUAL16.asm")
 		.then(r => r.text())
 		.then(r => g_codeEditor.setValue(r))
 	
@@ -80,6 +81,28 @@ function onKeyDown(ev)
 	{
 		ev.preventDefault()
 		assemble()
+	}
+}
+
+function onRuleChange(){
+
+	let rule = document.getElementById("selectRule").selectedIndex
+
+	switch (rule) {
+		case 0:
+			fetch("../rules/VIRTUAL16.asm")
+				.then(r => r.text())
+				.then(r => g_codeEditor.setValue(r))
+			break;
+		case 1:
+			fetch("../rules/nes/cpu6502.asm")
+				.then(r => r.text())
+				.then(r => g_codeEditor.setValue(r))
+		default:
+			fetch("../rules/VIRTUAL16.asm")
+				.then(r => r.text())
+				.then(r => g_codeEditor.setValue(r))
+			break;
 	}
 }
 
