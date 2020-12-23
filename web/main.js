@@ -104,6 +104,7 @@ function onRuleChange(){
 				.then(r => g_codeEditor.setValue(r))
 			break;
 	}
+	g_codeEditor.refresh()
 }
 
 
