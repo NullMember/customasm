@@ -85,7 +85,7 @@ function onKeyDown(ev)
 }
 
 function onRuleChange(){
-	let rules = ["../rules/VIRTUAL16.asm", "../rules/nes/cpu6502.asm"]
+	let rules = ["../rules/VIRTUAL16.asm", "../rules/6502.asm"]
 	let rule = document.getElementById("selectRule").selectedIndex
 
 	fetch(rules[rule])
