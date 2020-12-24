@@ -85,22 +85,13 @@ function onKeyDown(ev)
 }
 
 function onRuleChange(){
-
+	let rules = ["../rules/VIRTUAL16.asm", "../rules/nes/cpu6502.asm"]
 	let rule = document.getElementById("selectRule").selectedIndex
 
-	switch (rule) {
-		case 0:
-			fetch("../rules/VIRTUAL16.asm")
-				.then(r => r.text())
-				.then(r => g_codeEditor.setValue(r))
-			break;
-		case 1:
-			fetch("../rules/nes/cpu6502.asm")
-				.then(r => r.text())
-				.then(r => g_codeEditor.setValue(r))
-		default:
-			break;
-	}
+	fetch(rules[rule])
+		.then(r => r.text())
+		.then(r => g_codeEditor.setValue(r))
+
 	g_codeEditor.refresh()
 }
 
