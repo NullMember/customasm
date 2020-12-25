@@ -591,6 +591,36 @@
     TYA                             => 0x98
 }
 
+VIRTUAL16 = 0xA000      ;Please enter VIRTUAL16 address
+
+ADD16 = VIRTUAL16 + 0x14d       ;ZP,y = ZP,x + ZP,y
+ADC16 = VIRTUAL16 + 0x14e       ;ZP,y = ZP,x + ZP,y + Carry
+SUB16 = VIRTUAL16 + 0x177       ;ZP,y = ZP,x - ZP,y
+SBC16 = VIRTUAL16 + 0x178       ;ZP,y = ZP,x - ZP,y - !Carry
+INC16 = VIRTUAL16 + 0x2f1       ;ZP,x = ZP,x + Y + 1
+DEC16 = VIRTUAL16 + 0x12a       ;ZP,x = ZP,x - Y - 1
+;if X != Y then ZP,y = ZP,x / ZP,x = ZP,y
+;if X == Y then ZP,x[0:7] = ZP,x[8:15] / ZP,x[8:15] = ZP,x[0:7]
+SWAP16 = VIRTUAL16 + 0x187
+UMUL16 = VIRTUAL16 + 0x1b3      ;0x18:0x19:0x1A:0x1B = ZP,x * ZP,y (unsigned)
+SMUL16 = VIRTUAL16 + 0x1bb      ;0x18:0x19:0x1A:0x1B = ZP,x * ZP,y (signed)
+AND16 = VIRTUAL16 + 0x254       ;ZP,y = ZP,x & ZP,y
+OR16 = VIRTUAL16 + 0x263        ;ZP,y = ZP,x | ZP,y
+XOR16 = VIRTUAL16 + 0x272       ;ZP,y = ZP,x ^ ZP,y
+ASL16 = VIRTUAL16 + 0x281       ;ZP,x = ZP,x << y (ZP,x[0] = 0)
+LSL16 = VIRTUAL16 + 0x281       ;ZP,x = ZP,x << y (ZP,x[0] = 0)
+ASR16 = VIRTUAL16 + 0x289       ;ZP,x = ZP,x >> y (ZP,x[15] = 0)
+LSR16 = VIRTUAL16 + 0x295       ;ZP,x = ZP,x >> y (ZP,x[14] = ZP,x[15])
+;if y == 0 then ZP,x[0] = 0
+;else ZP,x[0] = Carry
+ROL16 = VIRTUAL16 + 0x29d       ;ZP,x = ZP,x << y
+RLC16 = VIRTUAL16 + 0x29e       ;ZP,x = ZP,x << y (ZP,x[0] = Carry)
+;if y == 0 then ZP,x[0] = 0
+;else ZP,x[0] = Carry
+ROR16 = VIRTUAL16 + 0x2a6       ;ZP,x = ZP,x >> y
+RRC16 = VIRTUAL16 + 0x2a7       ;ZP,x = ZP,x >> y (ZP,x[15] = Carry)
+
+
 ;Write your code below here
 
 MAIN:
