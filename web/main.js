@@ -1,6 +1,9 @@
 let g_wasm = null
 let g_codeEditor = null
-
+let rules = ["../rules/VIRTUAL16.asm", "../rules/6502.asm"]
+let cursorBackup = new Array(rules.length)
+let editorBackup = new Array(rules.length)
+let lastRule = 0
 
 function main()
 {
@@ -31,8 +34,10 @@ function setupEditor()
 		lineNumbers: true, matchBrackets: true, indentWithTabs: true, highlightSelectionMatches : true,
 		tabSize: 4, indentUnit: 4, mode: "z80"
 	})
-	
-	fetch("../rules/VIRTUAL16.asm")
+
+	lastRule = document.getElementById("selectRule").selectedIndex
+
+	fetch(rules[lastRule])
 		.then(r => r.text())
 		.then(r => g_codeEditor.setValue(r))
 	
@@ -85,14 +90,18 @@ function onKeyDown(ev)
 }
 
 function onRuleChange(){
-	let rules = ["../rules/VIRTUAL16.asm", "../rules/6502.asm"]
-	let rule = document.getElementById("selectRule").selectedIndex
-
-	fetch(rules[rule])
-		.then(r => r.text())
-		.then(r => g_codeEditor.setValue(r))
-
-	g_codeEditor.refresh()
+	editorBackup[lastRule] = g_codeEditor.getValue()
+	cursorBackup[lastRule] = g_codeEditor.getScrollInfo().top
+	lastRule = document.getElementById("selectRule").selectedIndex
+	if(!editorBackup[lastRule]){
+		fetch(rules[lastRule])
+			.then(r => r.text())
+			.then(r => g_codeEditor.setValue(r))
+	}
+	else{
+		g_codeEditor.setValue(editorBackup[lastRule])
+		g_codeEditor.scrollTo(0, cursorBackup[lastRule])
+	}
 }
 
 
