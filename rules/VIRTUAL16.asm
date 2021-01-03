@@ -107,21 +107,21 @@
 
 	BCC	{label}						=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x25 @ reladdr`8
 	}
 	BCS	{label}						=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x26 @ reladdr`8
 	}
 	BRA	{label}						=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x27 @ reladdr`8
@@ -137,84 +137,84 @@
 	MOV	 {reg: reg}, {label}		=> 0x9  @ reg`4 @ label[7:0] @ label[15:8]
 	BNM1 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xA @ dst`4 @ reladdr`8
 	}
 	BM1	 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xB @ dst`4 @ reladdr`8
 	}
 	BMI	 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xC @ dst`4 @ reladdr`8
 	}
 	BPL	 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xD @ dst`4 @ reladdr`8
 	}
 	BNE	 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xE @ dst`4 @ reladdr`8
 	}
 	BEQ	 {dst: reg}, {label}		=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xF @ dst`4 @ reladdr`8
 	}
 	BNM1 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xAD @ reladdr`8
 	}
 	BM1	 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xBD @ reladdr`8
 	}
 	BMI	 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xCD @ reladdr`8
 	}
 	BPL	 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xDD @ reladdr`8
 	}
 	BNE	 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xED @ reladdr`8
 	}
 	BEQ	 {label}					=>
 	{
-		reladdr = label - pc - 2
+		reladdr = label - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xFD @ reladdr`8

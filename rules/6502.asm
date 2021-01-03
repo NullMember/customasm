@@ -105,56 +105,56 @@
     
     BCC {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x90 @ reladdr`8
 	}
     BCS {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xB0 @ reladdr`8
 	}
     BEQ {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xF0 @ reladdr`8
 	}
     BMI {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x30 @ reladdr`8
 	}
     BNE {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0xD0 @ reladdr`8
 	}
     BPL {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x10 @ reladdr`8
 	}
     BVC {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x50 @ reladdr`8
 	}
     BVS {VAL}                       =>
     {
-		reladdr = VAL - pc - 2
+		reladdr = VAL - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
 		0x70 @ reladdr`8
@@ -620,6 +620,7 @@ RLC16 = VIRTUAL16 + 0x29e       ;ZP,x = ZP,x << y (ZP,x[0] = Carry)
 ROR16 = VIRTUAL16 + 0x2a6       ;ZP,x = ZP,x >> y
 RRC16 = VIRTUAL16 + 0x2a7       ;ZP,x = ZP,x >> y (ZP,x[15] = Carry)
 
+$ = 0x0200
 
 ;Write your code below here
 
