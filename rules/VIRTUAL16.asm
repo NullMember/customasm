@@ -65,19 +65,19 @@
 	SWAP {src: reg}, {dst: reg} 	=> 0x0D @ src`4 @ dst`4
 	SWAP {reg: reg}		 	=> 0x0D @ reg`4 @ reg`4
 
-	AND  {src: reg}, {dst: reg}	=> 0x0E @ dst`4 @ src`4
-	OR   {src: reg}, {dst: reg}	=> 0x0F @ dst`4 @ src`4
-	XOR  {src: reg}, {dst: reg}	=> 0x10 @ dst`4 @ src`4
+	AND  {src: reg}, {dst: reg}	=> 0x0E @ src`4 @ dst`4
+	OR   {src: reg}, {dst: reg}	=> 0x0F @ src`4 @ dst`4
+	XOR  {src: reg}, {dst: reg}	=> 0x10 @ src`4 @ dst`4
 
-	ADD  {src: reg}, {dst: reg}	=> 0x11 @ dst`4 @ src`4
-	ADC  {src: reg}, {dst: reg}	=> 0x12 @ dst`4 @ src`4
-	SUB  {src: reg}, {dst: reg}	=> 0x13 @ dst`4 @ src`4
-	SBC  {src: reg}, {dst: reg}	=> 0x14 @ dst`4 @ src`4
-	SMUL {src: reg}, {dst: reg}	=> 0x15 @ dst`4 @ src`4
-	UMUL {src: reg}, {dst: reg}	=> 0x16 @ dst`4 @ src`4
+	ADD  {src: reg}, {dst: reg}	=> 0x11 @ src`4 @ dst`4
+	ADC  {src: reg}, {dst: reg}	=> 0x12 @ src`4 @ dst`4
+	SUB  {src: reg}, {dst: reg}	=> 0x13 @ src`4 @ dst`4
+	SBC  {src: reg}, {dst: reg}	=> 0x14 @ src`4 @ dst`4
+	SMUL {src: reg}, {dst: reg}	=> 0x15 @ src`4 @ dst`4
+	UMUL {src: reg}, {dst: reg}	=> 0x16 @ src`4 @ dst`4
 
-	CMP  {src: reg}, {dst: reg}	=> 0x17 @ dst`4 @ src`4
-	CMP  {src: reg}			=> 0x17 @ dst`4 @ 13`4
+	CMP  {src: reg}, {dst: reg}	=> 0x17 @ src`4 @ dst`4
+	CMP  {src: reg}			=> 0x17 @ src`4 @ 13`4
 
 	INC  {dst: reg}, {count: u4}	=> 0x18 @ dst`4 @ count`4
 	INC  {dst: reg}			=> 0x18 @ dst`4 @ 0`4
