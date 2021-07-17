@@ -1,594 +1,240 @@
-; Copyright (c) 2020 Malik Enes Şafak
-;
-; Permission is hereby granted, free of charge, to any person obtaining
-; a copy of this software and associated documentation files (the
-; "Software"), to deal in the Software without restriction, including
-; without limitation the rights to use, copy, modify, merge, publish,
-; distribute, sublicense, and/or sell copies of the Software, and to
-; permit persons to whom the Software is furnished to do so, subject to
-; the following conditions:
-;
-; The above copyright notice and this permission notice shall be
-; included in all copies or substantial portions of the Software.
-;
-; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KVAL,
-; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-; LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-; OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-; WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-#bits 8
-
-#ruledef
+#subruledef cpu6502_reladdr
 {
-    ADC #{VAL}                      => 0x69 @ VAL`8
-    ADC {VAL}                      => 
-    {
-        assert(VAL <= 0xFF)
-        0x65 @ VAL`8
-    }
-    ADC {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x75 @ VAL`8
-    }
-    ADC {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x6D @ VAL[7:0] @ VAL[15:8]
-    }
-    ADC {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x7D @ VAL[7:0] @ VAL[15:8]
-    }
-    ADC {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0x79 @ VAL[7:0] @ VAL[15:8]
-    }
-    ADC ({VAL}, X)                  => 0x61 @ VAL`8
-    ADC ({VAL}), Y                  => 0x71 @ VAL`8
-
-    AND #{VAL}                      => 0x29 @ VAL`8
-    AND {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x25 @ VAL`8
-    }
-    AND {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x35 @ VAL`8
-    }
-    AND {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x2D @ VAL[7:0] @ VAL[15:8]
-    }
-    AND {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x3D @ VAL[7:0] @ VAL[15:8]
-    }
-    AND {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0x39 @ VAL[7:0] @ VAL[15:8]
-    }
-    AND ({VAL}, X)                  => 0x21 @ VAL`8
-    AND ({VAL}), Y                  => 0x31 @ VAL`8
-
-    ASL                             => 0x0A
-    ASL {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x06 @ VAL`8
-    }
-    ASL {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x16 @ VAL`8
-    }
-    ASL {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x0E @ VAL[7:0] @ VAL[15:8]
-    }
-    ASL {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x1E @ VAL[7:0] @ VAL[15:8]
-    }
-    
-    BCC {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
+	{addr: u16} =>
+	{
+		reladdr = addr - $ - 2
 		assert(reladdr <=  0x7f)
 		assert(reladdr >= !0x7f)
-		0x90 @ reladdr`8
+		reladdr`8
 	}
-    BCS {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0xB0 @ reladdr`8
-	}
-    BEQ {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0xF0 @ reladdr`8
-	}
-    BMI {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0x30 @ reladdr`8
-	}
-    BNE {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0xD0 @ reladdr`8
-	}
-    BPL {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0x10 @ reladdr`8
-	}
-    BVC {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0x50 @ reladdr`8
-	}
-    BVS {VAL}                       =>
-    {
-		reladdr = VAL - $ - 2
-		assert(reladdr <=  0x7f)
-		assert(reladdr >= !0x7f)
-		0x70 @ reladdr`8
-	}
+}
 
-    BIT {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x24 @ VAL`8
-    }
-    BIT {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x2C @ VAL[7:0] @ VAL[15:8]
-    }
 
-    BRK                             => 0x00
+#ruledef cpu6502
+{
+	adc #{imm:   i8 }      => 0x69 @ imm
+	adc <{zaddr: u8 }      => 0x65 @ zaddr
+	adc <{zaddr: u8 },  x  => 0x75 @ zaddr
+	adc  {zaddr: u8 }      => 0x65 @ zaddr
+	adc  {zaddr: u8 },  x  => 0x75 @ zaddr
+	adc  {addr:  u16}      => 0x6d @ le(addr)
+	adc  {addr:  u16},  x  => 0x7d @ le(addr)
+	adc  {addr:  u16},  y  => 0x79 @ le(addr)
+	adc ({zaddr: u8 },  x) => 0x61 @ zaddr
+	adc ({zaddr: u8 }), y  => 0x71 @ zaddr
 
-    CLC                             => 0x18
-    CLD                             => 0xD8
-    CLI                             => 0x58
-    CLV                             => 0xB8
-    
-    CMP #{VAL}                      => 0xC9 @ VAL`8
-    CMP {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xC5 @ VAL`8
-    }
-    CMP {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xD5 @ VAL`8
-    }
-    CMP {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xCD @ VAL[7:0] @ VAL[15:8]
-    }
-    CMP {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xDD @ VAL[7:0] @ VAL[15:8]
-    }
-    CMP {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0xD9 @ VAL[7:0] @ VAL[15:8]
-    }
-    CMP ({VAL}, X)                  => 0xC1 @ VAL`8
-    CMP ({VAL}), Y                  => 0xD1 @ VAL`8
+	and #{imm:   i8 }	   => 0x29 @ imm
+	and <{zaddr: u8 }      => 0x25 @ zaddr
+	and <{zaddr: u8 },  x  => 0x35 @ zaddr
+	and  {zaddr: u8 }      => 0x25 @ zaddr
+	and  {zaddr: u8 },  x  => 0x35 @ zaddr
+	and  {addr:  u16}	   => 0x2d @ le(addr)
+	and  {addr:  u16},  x  => 0x3d @ le(addr)
+	and  {addr:  u16},  y  => 0x39 @ le(addr)
+	and ({zaddr: u8 },  x) => 0x21 @ zaddr
+	and ({zaddr: u8 }), y  => 0x31 @ zaddr
 
-    CPX #{VAL}                      => 0xE0 @ VAL`8
-    CPX {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xE4 @ VAL`8
-    }
-    CPX {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xEC @ VAL[7:0] @ VAL[15:8]
-    }
+	asl  a               => 0x0a
+	asl <{zaddr: u8 }    => 0x07 @ zaddr
+	asl <{zaddr: u8 }, x => 0x16 @ zaddr
+	asl  {zaddr: u8 }    => 0x07 @ zaddr
+	asl  {zaddr: u8 }, x => 0x16 @ zaddr
+	asl  {addr:  u16}    => 0x0e @ le(addr)
+	asl  {addr:  u16}, x => 0x1e @ le(addr)
 
-    CPX #{VAL}                      => 0xC0 @ VAL`8
-    CPX {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xC4 @ VAL`8
-    }
-    CPX {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xCC @ VAL[7:0] @ VAL[15:8]
-    }
+	bcc {addr: cpu6502_reladdr} => 0x90 @ addr
+	bcs {addr: cpu6502_reladdr} => 0x80 @ addr
+	beq {addr: cpu6502_reladdr} => 0xf0 @ addr
 
-    DEC {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xC6 @ VAL`8
-    }
-    DEC {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xD6 @ VAL`8
-    }
-    DEC {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xCE @ VAL[7:0] @ VAL[15:8]
-    }
-    DEC {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xDE @ VAL[7:0] @ VAL[15:8]
-    }
+	bit <{zaddr: u8 } => 0x24 @ zaddr
+	bit  {addr:  u16} => 0x2C @ le(addr)
 
-    DEX                             => 0xCA
-    DEY                             => 0x88
+	bmi {addr: cpu6502_reladdr} => 0x30 @ addr
+	bne {addr: cpu6502_reladdr} => 0xd0 @ addr
+	bpl {addr: cpu6502_reladdr} => 0x10 @ addr
 
-    EOR #{VAL}                      => 0x49 @ VAL`8
-    EOR {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x45 @ VAL`8
-    }
-    EOR {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x55 @ VAL`8
-    }
-    EOR {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x4D @ VAL[7:0] @ VAL[15:8]
-    }
-    EOR {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x5D @ VAL[7:0] @ VAL[15:8]
-    }
-    EOR {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0x59 @ VAL[7:0] @ VAL[15:8]
-    }
-    EOR ({VAL}, X)                  => 0x41 @ VAL`8
-    EOR ({VAL}), Y                  => 0x51 @ VAL`8
+	brk => 0x00
 
-    INC {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xE6 @ VAL`8
-    }
-    INC {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xF6 @ VAL`8
-    }
-    INC {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xEE @ VAL[7:0] @ VAL[15:8]
-    }
-    INC {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xFE @ VAL[7:0] @ VAL[15:8]
-    }
+	bvc {addr: cpu6502_reladdr} => 0x50 @ addr
+	bvs {addr: cpu6502_reladdr} => 0x70 @ addr
 
-    INX                             => 0xE8
-    INY                             => 0xC8
+	clc => 0x18
+	cld => 0xd8
+	cli => 0x58
+	clv => 0xb8
 
-    JMP {VAL}                       => 0x4C @ VAL[7:0] @ VAL[15:8]
-    INC ({VAL})                     => 0x6C @ VAL[7:0] @ VAL[15:8]
-    JSR {VAL}                       => 0x20 @ VAL[7:0] @ VAL[15:8]
+	cmp #{imm:   i8 }      => 0xc9 @ imm
+	cmp <{zaddr: u8 }      => 0xc5 @ zaddr
+	cmp <{zaddr: u8 },  x  => 0xd5 @ zaddr
+	cmp  {zaddr: u8 }      => 0xc5 @ zaddr
+	cmp  {zaddr: u8 },  x  => 0xd5 @ zaddr
+	cmp  {addr:  u16}      => 0xcd @ le(addr)
+	cmp  {addr:  u16},  x  => 0xdd @ le(addr)
+	cmp  {addr:  u16},  y  => 0xd9 @ le(addr)
+	cmp ({zaddr: u8 },  x) => 0xc1 @ zaddr
+	cmp ({zaddr: u8 }), y  => 0xd1 @ zaddr
 
-    LDA #{VAL}                      => 0xA9 @ VAL`8
-    LDA {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xA5 @ VAL`8
-    }
-    LDA {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xB5 @ VAL`8
-    }
-    LDA {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xAD @ VAL[7:0] @ VAL[15:8]
-    }
-    LDA {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xBD @ VAL[7:0] @ VAL[15:8]
-    }
-    LDA {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0xB9 @ VAL[7:0] @ VAL[15:8]
-    }
-    LDA ({VAL}, X)                  => 0xA1 @ VAL`8
-    LDA ({VAL}), Y                  => 0xB1 @ VAL`8
+	cpx #{imm:   i8 } => 0xe0 @ imm
+	cpx <{zaddr: u8 } => 0xe4 @ zaddr
+	cpx  {zaddr: u8 } => 0xe4 @ zaddr
+	cpx  {addr:  u16} => 0xec @ le(addr)
 
-    LDX #{VAL}                      => 0xA2 @ VAL`8
-    LDX {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xA6 @ VAL`8
-    }
-    LDX {VAL}, Y                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xB6 @ VAL`8
-    }
-    LDX {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xAE @ VAL[7:0] @ VAL[15:8]
-    }
-    LDX {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0xBE @ VAL[7:0] @ VAL[15:8]
-    }
+	cpy #{imm:   i8 } => 0xc0 @ imm
+	cpy <{zaddr: u8 } => 0xc4 @ zaddr
+	cpy  {zaddr: u8 } => 0xc4 @ zaddr
+	cpy  {addr:  u16} => 0xcc @ le(addr)
 
-    LDY #{VAL}                      => 0xA0 @ VAL`8
-    LDY {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xA4 @ VAL`8
-    }
-    LDY {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xB4 @ VAL`8
-    }
-    LDY {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xAC @ VAL[7:0] @ VAL[15:8]
-    }
-    LDY {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xBC @ VAL[7:0] @ VAL[15:8]
-    }
+	dec <{zaddr: u8 }    => 0xc6 @ zaddr
+	dec <{zaddr: u8 }, x => 0xd6 @ zaddr
+	dec  {zaddr: u8 }    => 0xc6 @ zaddr
+	dec  {zaddr: u8 }, x => 0xd6 @ zaddr
+	dec  {addr:  u16}    => 0xce @ le(addr)
+	dec  {addr:  u16}, x => 0xde @ le(addr)
 
-    LSR #{VAL}                      => 0x4A @ VAL`8
-    LSR {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x46 @ VAL`8
-    }
-    LSR {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x46 @ VAL`8
-    }
-    LSR {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x4E @ VAL[7:0] @ VAL[15:8]
-    }
-    LSR {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x5E @ VAL[7:0] @ VAL[15:8]
-    }
+	dex => 0xca
+	dey => 0x88
 
-    NOP                             => 0xEA
+	eor #{imm:   i8 }      => 0x49 @ imm
+	eor <{zaddr: u8 }      => 0x45 @ zaddr
+	eor <{zaddr: u8 },  x  => 0x55 @ zaddr
+	eor  {zaddr: u8 }      => 0x45 @ zaddr
+	eor  {zaddr: u8 },  x  => 0x55 @ zaddr
+	eor  {addr:  u16}      => 0x4d @ le(addr)
+	eor  {addr:  u16},  x  => 0x5d @ le(addr)
+	eor  {addr:  u16},  y  => 0x59 @ le(addr)
+	eor ({zaddr: u8 },  x) => 0x41 @ zaddr
+	eor ({zaddr: u8 }), y  => 0x51 @ zaddr
 
-    ORA #{VAL}                      => 0x09 @ VAL`8
-    ORA {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x05 @ VAL`8
-    }
-    ORA {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x15 @ VAL`8
-    }
-    ORA {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x0D @ VAL[7:0] @ VAL[15:8]
-    }
-    ORA {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x1D @ VAL[7:0] @ VAL[15:8]
-    }
-    ORA {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0x19 @ VAL[7:0] @ VAL[15:8]
-    }
-    ORA ({VAL}, X)                  => 0x01 @ VAL`8
-    ORA ({VAL}), Y                  => 0x11 @ VAL`8
+	inc <{zaddr: u8 }    => 0xe6 @ zaddr
+	inc <{zaddr: u8 }, x => 0xf6 @ zaddr
+	inc  {zaddr: u8 }    => 0xe6 @ zaddr
+	inc  {zaddr: u8 }, x => 0xf6 @ zaddr
+	inc  {addr:  u16}    => 0xee @ le(addr)
+	inc  {addr:  u16}, x => 0xfe @ le(addr)
 
-    PHA                             => 0x48
-    PHP                             => 0x08
-    PLA                             => 0x68
-    PLP                             => 0x28
+	inx => 0xe8
+	iny => 0xc8
 
-    ROL #{VAL}                      => 0x2A @ VAL`8
-    ROL {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x26 @ VAL`8
-    }
-    ROL {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x36 @ VAL`8
-    }
-    ROL {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x2E @ VAL[7:0] @ VAL[15:8]
-    }
-    ROL {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x3E @ VAL[7:0] @ VAL[15:8]
-    }
+	jmp  {addr: u16}  => 0x4c @ le(addr)
+	jmp ({addr: u16}) => 0x6c @ le(addr)
 
-    ROR #{VAL}                      => 0x6A @ VAL`8
-    ROR {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x66 @ VAL`8
-    }
-    ROR {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x76 @ VAL`8
-    }
-    ROR {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x6E @ VAL[7:0] @ VAL[15:8]
-    }
-    ROR {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x7E @ VAL[7:0] @ VAL[15:8]
-    }
+	jsr {addr: u16}  => 0x20 @ le(addr)
 
-    RTI                             => 0x40
-    RTS                             => 0x60
+	lda #{imm:   i8 }      => 0xa9 @ imm
+	lda <{zaddr: u8 }      => 0xa5 @ zaddr
+	lda <{zaddr: u8 },  x  => 0xb5 @ zaddr
+	lda  {zaddr: u8 }      => 0xa5 @ zaddr
+	lda  {zaddr: u8 },  x  => 0xb5 @ zaddr
+	lda  {addr:  u16}      => 0xad @ le(addr)
+	lda  {addr:  u16},  x  => 0xbd @ le(addr)
+	lda  {addr:  u16},  y  => 0xb9 @ le(addr)
+	lda ({zaddr: u8 },  x) => 0xa1 @ zaddr
+	lda ({zaddr: u8 }), y  => 0xb1 @ zaddr
 
-    SBC #{VAL}                      => 0xE9 @ VAL`8
-    SBC {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0xE5 @ VAL`8
-    }
-    SBC {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0xF5 @ VAL`8
-    }
-    SBC {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0xED @ VAL[7:0] @ VAL[15:8]
-    }
-    SBC {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0xFD @ VAL[7:0] @ VAL[15:8]
-    }
-    SBC {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0xF9 @ VAL[7:0] @ VAL[15:8]
-    }
-    SBC ({VAL}, X)                  => 0xE1 @ VAL`8
-    SBC ({VAL}), Y                  => 0xF1 @ VAL`8
+    ldx #{imm:   i8 }    => 0xa2 @ imm
+	ldx <{zaddr: u8 }    => 0xa6 @ zaddr
+	ldx <{zaddr: u8 }, y => 0xb6 @ zaddr
+	ldx  {zaddr: u8 }    => 0xa6 @ zaddr
+	ldx  {zaddr: u8 }, y => 0xb6 @ zaddr
+	ldx  {addr:  u16}    => 0xae @ le(addr)
+	ldx  {addr:  u16}, y => 0xbe @ le(addr)
 
-    SEC                             => 0x38
-    SED                             => 0xF8
-    SEI                             => 0x78
+	ldy #{imm:   i8 }    => 0xa0 @ imm
+	ldy <{zaddr: u8 }    => 0xa4 @ zaddr
+	ldy <{zaddr: u8 }, x => 0xb4 @ zaddr
+	ldy  {zaddr: u8 }    => 0xa4 @ zaddr
+	ldy  {zaddr: u8 }, x => 0xb4 @ zaddr
+	ldy  {addr:  u16}    => 0xac @ le(addr)
+	ldy  {addr:  u16}, x => 0xbc @ le(addr)
 
-    STA {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x85 @ VAL`8
-    }
-    STA {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x95 @ VAL`8
-    }
-    STA {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x8D @ VAL[7:0] @ VAL[15:8]
-    }
-    STA {VAL}, X                    => 
-    {
-        assert(VAL > 0xFF)
-        0x9D @ VAL[7:0] @ VAL[15:8]
-    }
-    STA {VAL}, Y                    => 
-    {
-        assert(VAL > 0xFF)
-        0x99 @ VAL[7:0] @ VAL[15:8]
-    }
-    STA ({VAL}, X)                  => 0x81 @ VAL`8
-    STA ({VAL}), Y                  => 0x91 @ VAL`8
+	lsr  a               => 0x4a
+	lsr <{zaddr: u8 }    => 0x46 @ zaddr
+	lsr <{zaddr: u8 }, x => 0x56 @ zaddr
+	lsr  {zaddr: u8 }    => 0x46 @ zaddr
+	lsr  {zaddr: u8 }, x => 0x56 @ zaddr
+	lsr  {addr:  u16}    => 0x4e @ le(addr)
+	lsr  {addr:  u16}, x => 0x5e @ le(addr)
 
-    STX {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x86 @ VAL`8
-    }
-    STX {VAL}, Y                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x96 @ VAL`8
-    }
-    STX {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x8E @ VAL[7:0] @ VAL[15:8]
-    }
+	nop => 0xea
 
-    STY {VAL}                        => 
-    {
-        assert(VAL <= 0xFF)
-        0x84 @ VAL`8
-    }
-    STY {VAL}, X                     => 
-    {
-        assert(VAL <= 0xFF)
-        0x94 @ VAL`8
-    }
-    STY {VAL}                       => 
-    {
-        assert(VAL > 0xFF)
-        0x8C @ VAL[7:0] @ VAL[15:8]
-    }
+	ora #{imm:   i8 }      => 0x09 @ imm
+	ora <{zaddr: u8 }      => 0x05 @ zaddr
+	ora <{zaddr: u8 },  x  => 0x15 @ zaddr
+	ora  {zaddr: u8 }      => 0x05 @ zaddr
+	ora  {zaddr: u8 },  x  => 0x15 @ zaddr
+	ora  {addr:  u16}      => 0x0d @ le(addr)
+	ora  {addr:  u16},  x  => 0x1d @ le(addr)
+	ora  {addr:  u16},  y  => 0x19 @ le(addr)
+	ora ({zaddr: u8 },  x) => 0x01 @ zaddr
+	ora ({zaddr: u8 }), y  => 0x11 @ zaddr
 
-    TAX                             => 0xAA
-    TAY                             => 0xA8
-    TSX                             => 0xBA
-    TXA                             => 0x8A
-    TXS                             => 0x9A
-    TYA                             => 0x98
+	pha => 0x48
+	php => 0x08
+	pla => 0x68
+	plp => 0x28
+
+	rol  a               => 0x2a
+	rol <{zaddr: u8 }    => 0x26 @ zaddr
+	rol <{zaddr: u8 }, x => 0x36 @ zaddr
+	rol  {zaddr: u8 }    => 0x26 @ zaddr
+	rol  {zaddr: u8 }, x => 0x36 @ zaddr
+	rol  {addr:  u16}    => 0x2e @ le(addr)
+	rol  {addr:  u16}, x => 0x3e @ le(addr)
+ 
+	ror  a               => 0x6a
+	ror <{zaddr: u8 }    => 0x66 @ zaddr
+	ror <{zaddr: u8 }, x => 0x76 @ zaddr
+	ror  {zaddr: u8 }    => 0x66 @ zaddr
+	ror  {zaddr: u8 }, x => 0x76 @ zaddr
+	ror  {addr:  u16}    => 0x6e @ le(addr)
+	ror  {addr:  u16}, x => 0x7e @ le(addr)
+
+	rti => 0x40
+	rts => 0x60
+
+	sbc #{imm:   i8 }      => 0xe9 @ imm
+	sbc <{zaddr: u8 }      => 0xe5 @ zaddr
+	sbc <{zaddr: u8 },  x  => 0xf5 @ zaddr
+	sbc  {zaddr: u8 }      => 0xe5 @ zaddr
+	sbc  {zaddr: u8 },  x  => 0xf5 @ zaddr
+	sbc  {addr:  u16}      => 0xed @ le(addr)
+	sbc  {addr:  u16},  x  => 0xfd @ le(addr)
+	sbc  {addr:  u16},  y  => 0xf9 @ le(addr)
+	sbc ({zaddr: u8 },  x) => 0xe1 @ zaddr
+	sbc ({zaddr: u8 }), y  => 0xf1 @ zaddr
+
+	sec => 0x38
+	sed => 0xf8
+	sei => 0x78
+
+	sta <{zaddr: u8 }      => 0x85 @ zaddr
+	sta <{zaddr: u8 },  x  => 0x95 @ zaddr
+	sta  {zaddr: u8 }      => 0x85 @ zaddr
+	sta  {zaddr: u8 },  x  => 0x95 @ zaddr
+	sta  {addr:  u16}      => 0x8d @ le(addr)
+	sta  {addr:  u16},  x  => 0x9d @ le(addr)
+	sta  {addr:  u16},  y  => 0x99 @ le(addr)
+	sta ({zaddr: u8 },  x) => 0x81 @ zaddr
+	sta ({zaddr: u8 }), y  => 0x91 @ zaddr
+
+	stx <{zaddr: u8 }    => 0x86 @ zaddr
+	stx <{zaddr: u8 }, y => 0x96 @ zaddr
+	stx  {zaddr: u8 }    => 0x86 @ zaddr
+	stx  {zaddr: u8 }, y => 0x96 @ zaddr
+	stx  {addr:  u16}    => 0x8e @ le(addr)
+
+	sty <{zaddr: u8 }    => 0x84 @ zaddr
+	sty <{zaddr: u8 }, x => 0x94 @ zaddr
+	sty  {zaddr: u8 }    => 0x84 @ zaddr
+	sty  {zaddr: u8 }, x => 0x94 @ zaddr
+	sty  {addr:  u16}    => 0x8c @ le(addr)
+
+	tax => 0xaa
+	tay => 0xa8
+	tsx => 0xba
+	txa => 0x8a
+	txs => 0x9a
+	tya => 0x98
 }
 
 VIRTUAL16 = 0xA000      ;Please enter VIRTUAL16 address

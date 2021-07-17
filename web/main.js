@@ -15,7 +15,7 @@ function main()
 	window.onbeforeunload = onBeforeUnload
 	document.getElementById("selectRule").onchange = onRuleChange
 	
-	fetch("customasm.gc.wasm")
+	fetch("customasm.wasm")
 		.then(r => r.arrayBuffer())
 		.then(r => WebAssembly.instantiate(r))
 		.then(wasm =>
