@@ -88,7 +88,7 @@
 	UMUL {src: reg}, {dst: reg}		=> 0x16 @ src`4 @ dst`4
 
 	CMP  {src: reg}, {dst: reg}		=> 0x17 @ src`4 @ dst`4
-	CMP  {src: reg}					=> 0x17 @ src`4 @ 13`4
+	CMP  {src: dst}					=> 0x17 @ 13`4 @ dst`4
 
 	INC  {dst: reg}, {count: u4}	=> 0x18 @ dst`4 @ count`4
 	INC  {dst: reg}					=> 0x18 @ dst`4 @ 0`4
