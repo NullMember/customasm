@@ -112,13 +112,18 @@
 
 	JMPR {reg: reg}					=> 0x21 @ reg`4 @ 15`4
 
-	JSR	 {addr: u16}				=> 0x22 @ le(addr)
+	JSRL {label: u16}				=> 0x22 @ le(label)
 	NJSR {addr: u16}				=> 0x23 @ le(addr)
-	JMP	 {addr: u16}				=> 0x24 @ le(addr)
+	JMPL {label: u16}				=> 0x24 @ le(label)
 
 	BCC	{label: reladdr}			=> 0x25 @ label
 	BCS	{label: reladdr}			=> 0x26 @ label
 	BRA	{label: reladdr}			=> 0x27 @ label
+	
+	PSHA							=> 0x28
+	POPA							=> 0x29
+	JSRA {addr: u16}				=> 0x2A @ le(addr)
+	JMPA {addr: u16}				=> 0x2B @ le(addr)
 	
 	PUSH {reg: reg}					=> 0x3  @ reg`4
 	POP  {reg: reg}					=> 0x4  @ reg`4
