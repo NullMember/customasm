@@ -62,7 +62,8 @@ pub struct RuleRef
 pub struct AssemblyOutput
 {
 	pub binary: util::BitVec,
-	pub symbols: asm::SymbolManager,
+	pub state: State,
+	pub iterations: usize,
 }
 
 
@@ -87,7 +88,7 @@ impl Assembler
 	
 	
 	pub fn assemble(
-        &mut self,
+        mut self,
         report: diagn::RcReport,
 		fileserver: &dyn util::FileServer,
 		max_iterations: usize)
@@ -117,7 +118,8 @@ impl Assembler
 					&mut self.state,
 					fileserver,
 					filename,
-					None);
+					None,
+					&mut std::collections::HashSet::new());
 				
 				if pass_report.has_errors() || result.is_err()
 				{
@@ -142,7 +144,7 @@ impl Assembler
 					bank,
 					bankdata,
 					fileserver);
-
+					
 				if pass_report.has_errors() || !bank_output.is_ok()
 				{
 					all_bankdata_resolved = false;
@@ -171,8 +173,9 @@ impl Assembler
 
 				return Ok(AssemblyOutput
 				{
+					state: self.state,
 					binary: full_output,
-					symbols: std::mem::replace(&mut self.state.symbols, asm::SymbolManager::new()),
+					iterations: iteration,
 				});
 			}
 
@@ -434,7 +437,7 @@ impl State
 
 		for invoc in &bankdata.invocations
 		{
-			let resolved = match invoc.kind
+			let maybe_resolved = match invoc.kind
 			{
 				asm::InvocationKind::Rule(_) =>
 				{
@@ -446,7 +449,8 @@ impl State
 						report.clone(),
 						&invoc,
 						fileserver,
-						true)?
+						true,
+						&mut expr::EvalContext::new())
 				}
 				
 				asm::InvocationKind::Data(_) =>
@@ -459,7 +463,7 @@ impl State
 						report.clone(),
 						&invoc,
 						fileserver,
-						true)?
+						true)
 				}
 				
 				asm::InvocationKind::Label(_) =>
@@ -481,6 +485,12 @@ impl State
 
 					continue;
 				}
+			};
+
+			let resolved = match maybe_resolved
+			{
+				Ok(r) => r,
+				Err(_) => continue,
 			};
 
 			let expr_name = match invoc.kind
@@ -627,27 +637,12 @@ impl State
 		report: diagn::RcReport,
 		invocation: &asm::Invocation,
 		fileserver: &dyn util::FileServer,
-		final_pass: bool)
+		final_pass: bool,
+		asm_block_args: &mut expr::EvalContext)
 		-> Result<expr::Value, ()>
 	{
-		self.resolve_rule_invocation_candidates(
-			report.clone(),
-			invocation,
-			&invocation.get_rule_invoc().candidates,
-			fileserver,
-			final_pass)
-	}
+		let candidates = &invocation.get_rule_invoc().candidates;
 
-
-	pub fn resolve_rule_invocation_candidates(
-		&self,
-		report: diagn::RcReport,
-		invocation: &asm::Invocation,
-		candidates: &Vec<asm::RuleInvocationCandidate>,
-		fileserver: &dyn util::FileServer,
-		final_pass: bool)
-		-> Result<expr::Value, ()>
-	{
 		if DEBUG_CANDIDATE_RESOLUTION
 		{
 			println!(
@@ -657,15 +652,22 @@ impl State
 
 		if final_pass && candidates.len() == 1
 		{
+			if DEBUG_CANDIDATE_RESOLUTION
+			{
+				println!("> final pass resolve (single candidate)");
+			}
+
 			return self.resolve_rule_invocation_candidate(
 				report,
 				invocation,
 				&candidates[0],
 				fileserver,
-				final_pass)
+				final_pass,
+				asm_block_args);
 		}
 
 		let mut successful_candidates = Vec::new();
+		let mut failed_candidates = Vec::new();
 
 		for candidate in candidates
 		{
@@ -686,7 +688,8 @@ impl State
 				invocation,
 				candidate,
 				fileserver,
-				final_pass)
+				final_pass,
+				asm_block_args)
 			{
 				Ok(resolved) =>
 				{
@@ -697,20 +700,68 @@ impl State
 
 					successful_candidates.push((candidate, resolved, candidate_report));
 				}
-				Err(()) => {}
+				Err(()) =>
+				{
+					failed_candidates.push((candidate, candidate_report));
+				}
 			}
 		}
 
+		// Retain only the candidates which produced the fewest bits
+		let mut smallest_output = usize::MAX;
+		for c in &successful_candidates
+		{
+			if let expr::Value::Integer(ref bigint) = c.1
+			{
+				if let Some(size) = bigint.size
+				{
+					smallest_output = std::cmp::min(smallest_output, size);
+				}
+			}
+		}
+
+		successful_candidates.retain(|c|
+		{
+			if let expr::Value::Integer(ref bigint) = c.1
+			{
+				if let Some(size) = bigint.size
+				{
+					return size == smallest_output;
+				}
+			}
+
+			false
+		});
+		
 		if successful_candidates.len() > 0
 		{
 			if final_pass
 			{
 				if successful_candidates.len() > 1
 				{
-					report.error_span(
-						"multiple matches for instruction",
+					let _guard = report.push_parent(
+						"multiple matches with the same output size",
 						&invocation.span);
+
+					let mut candidate_notes = Vec::new();
+
+					for c in successful_candidates
+					{
+						let rule_group = &self.rulesets[c.0.rule_ref.ruleset_ref.index];
+						let rule = &rule_group.rules[c.0.rule_ref.index];
+		
+						candidate_notes.push(diagn::Message::note_span(
+							"matching rule candidate:",
+							&rule.span));
+					}
+
+					report.push_multiple(candidate_notes);					
 					return Err(())
+				}
+
+				if DEBUG_CANDIDATE_RESOLUTION
+				{
+					println!("> final pass resolve (multiple candidates)");
 				}
 
 				self.resolve_rule_invocation_candidate(
@@ -718,7 +769,8 @@ impl State
 					invocation,
 					successful_candidates[0].0,
 					fileserver,
-					final_pass)
+					final_pass,
+					asm_block_args)
 			}
 			else
 			{
@@ -728,6 +780,21 @@ impl State
 		}
 		else
 		{
+			if final_pass
+			{
+				for e in failed_candidates
+				{
+					let rule_group = &self.rulesets[e.0.rule_ref.ruleset_ref.index];
+					let rule = &rule_group.rules[e.0.rule_ref.index];
+	
+					let _guard = report.push_parent_note(
+						"while attempting the following rule candidate:",
+						&rule.span);
+	
+					e.1.transfer_to(report.clone());
+				}
+			}
+
 			Err(())
 		}
 	}
@@ -739,7 +806,8 @@ impl State
 		invocation: &asm::Invocation,
 		candidate: &asm::RuleInvocationCandidate,
 		fileserver: &dyn util::FileServer,
-		final_pass: bool)
+		final_pass: bool,
+		asm_block_args: &mut expr::EvalContext)
 		-> Result<expr::Value, ()>
 	{
 		let rule = self.get_rule(candidate.rule_ref).unwrap();
@@ -755,7 +823,7 @@ impl State
 						report.clone(),
 						&expr,
 						&invocation.ctx,
-						&mut expr::EvalContext::new(),
+						asm_block_args,
 						fileserver,
 						final_pass)?;
 
@@ -770,18 +838,24 @@ impl State
 					eval_ctx.set_local(&arg.name, arg_value);
 				}
 
-				&asm::RuleInvocationArgument::NestedRuleset(ref inner_candidates) =>
+				&asm::RuleInvocationArgument::NestedRuleset(ref inner_candidate) =>
 				{
-					let arg_value = self.resolve_rule_invocation_candidates(
+					let arg_value = self.resolve_rule_invocation_candidate(
 						report.clone(),
 						invocation,
-						&inner_candidates,
+						&inner_candidate,
 						fileserver,
-						final_pass)?;
+						final_pass,
+						asm_block_args)?;
 
 					let arg_name = &rule.parameters[arg_index].name;
 
 					eval_ctx.set_local(arg_name, arg_value);
+					
+					if let Some(tokens) = &candidate.token_args[arg_index]
+					{
+						eval_ctx.set_token_sub(arg_name, tokens.clone());
+					}
 				}
 			}
 		}
@@ -906,7 +980,8 @@ impl State
 			report,
 			eval_ctx,
 			&|info| self.eval_var(ctx, info, fileserver, final_pass),
-			&|info| self.eval_fn(ctx, info, fileserver))
+			&|info| self.eval_fn(ctx, info, fileserver),
+			&|info| self.eval_asm(ctx, info, fileserver))
 	}
 	
 		
@@ -937,7 +1012,8 @@ impl State
 				"assert" |
 				"incbin" |
 				"incbinstr" |
-				"inchexstr"  =>
+				"inchexstr" |
+				"le" =>
 				{
 					return Ok(expr::Value::Function(info.hierarchy[0].clone()));
 				}
@@ -974,6 +1050,85 @@ impl State
 	}
 
 
+	fn eval_fn_check_arg_number(
+		info: &expr::EvalFunctionInfo,
+		expected: usize)
+		-> Result<(), bool>
+	{
+		if info.args.len() != expected
+		{
+			info.report.error_span("wrong number of arguments", info.span);
+			Err(true)
+		}
+		else
+		{
+			Ok(())
+		}
+	}
+
+
+	fn eval_fn_get_bool_arg(
+		info: &expr::EvalFunctionInfo,
+		index: usize)
+		-> Result<bool, bool>
+	{
+		match info.args[index]
+		{
+			expr::Value::Bool(value) => Ok(value),
+			_ =>
+			{
+				info.report.error_span("expected boolean argument", info.span);
+				Err(true)
+			}
+		}
+	}
+
+
+	fn eval_fn_get_bigint_arg<'a>(
+		info: &'a expr::EvalFunctionInfo,
+		index: usize)
+		-> Result<&'a util::BigInt, bool>
+	{
+		match &info.args[index]
+		{
+			expr::Value::Integer(value) => Ok(value),
+			_ =>
+			{
+				info.report.error_span("expected integer argument", info.span);
+				Err(true)
+			}
+		}
+	}
+
+
+	fn eval_fn_get_sized_bigint_arg<'a>(
+		info: &'a expr::EvalFunctionInfo,
+		index: usize)
+		-> Result<&'a util::BigInt, bool>
+	{
+		match &info.args[index]
+		{
+			expr::Value::Integer(value) =>
+			{
+				match value.size
+				{
+					Some(_) => Ok(value),
+					None =>
+					{
+						info.report.error_span("unsized integer argument", info.span);
+						Err(true)
+					}
+				}
+			}
+			_ =>
+			{
+				info.report.error_span("expected integer argument", info.span);
+				Err(true)
+			}
+		}
+	}
+
+
 	fn eval_fn(
 		&self,
 		ctx: &Context,
@@ -989,124 +1144,113 @@ impl State
 				{
 					"assert" =>
 					{
-						if info.args.len() != 1
+						State::eval_fn_check_arg_number(info, 1)?;
+						match State::eval_fn_get_bool_arg(info, 0)?
 						{
-							info.report.error_span("wrong number of arguments", info.span);
+							true => Ok(expr::Value::Void),
+							false =>
+							{
+								info.report.error_span("assertion failed", info.span);
+								Err(true)
+							}
+						}
+					}
+
+					"le" =>
+					{
+						State::eval_fn_check_arg_number(info, 1)?;
+						let bigint = State::eval_fn_get_sized_bigint_arg(info, 0)?;
+						
+						if bigint.size.unwrap() % 8 != 0
+						{
+							info.report.error_span(
+								format!("argument size (= {}) is not a multiple of 8",
+									bigint.size.unwrap()),
+								info.span);
 							return Err(true);
 						}
-							
-						match info.args[0]
-						{
-							expr::Value::Bool(value) =>
-							{
-								match value
-								{
-									true => Ok(expr::Value::Void),
-									false =>
-									{
-										info.report.error_span("assertion failed", info.span);
-										return Err(true);
-									}
-								}
-							}
-							
-							_ =>
-							{
-								info.report.error_span("wrong argument type", info.span);
-								return Err(true);
-							}
-						}
+
+						Ok(expr::Value::make_integer(bigint.convert_le()))
 					}
 
 					"incbin" |
 					"incbinstr" |
 					"inchexstr" =>
 					{
-						match &info.args[..]
+						State::eval_fn_check_arg_number(info, 1)?;
+						let bigint = State::eval_fn_get_bigint_arg(info, 0)?;
+						let filename = bigint.as_string();
+						let new_filename = util::filename_navigate(
+							info.report.clone(),
+							&ctx.cur_filename,
+							&filename,
+							&info.span)
+							.map_err(|_| true)?;
+
+						match name.as_ref()
 						{
-							&[expr::Value::Integer(ref bigint)] =>
+							"incbin" =>
 							{
-								let filename = bigint.as_string();
-								let new_filename = util::filename_navigate(
+								let bytes = fileserver.get_bytes(
 									info.report.clone(),
-									&ctx.cur_filename,
-									&filename,
-									&info.span)
+									&new_filename,
+									Some(&info.span))
 									.map_err(|_| true)?;
 
-								match name.as_ref()
+								Ok(expr::Value::make_integer(util::BigInt::from_bytes_be(&bytes)))
+							}
+
+							"incbinstr" |
+							"inchexstr" =>
+							{
+								let chars = fileserver.get_chars(
+									info.report.clone(),
+									&new_filename,
+									Some(&info.span))
+									.map_err(|_| true)?;
+
+								let mut bitvec = util::BitVec::new();
+
+								let bits_per_char = match name.as_ref()
 								{
-									"incbin" =>
+									"incbinstr" => 1,
+									"inchexstr" => 4,
+									_ => unreachable!(),
+								};
+								
+								for c in chars
+								{
+									if syntax::is_whitespace(c) ||
+										c == '_' ||
+										c == '\r' || c == '\n'
 									{
-										let bytes = fileserver.get_bytes(
-											info.report.clone(),
-											&new_filename,
-											Some(&info.span))
-											.map_err(|_| true)?;
-
-										Ok(expr::Value::make_integer(util::BigInt::from_bytes_be(&bytes)))
+										continue;
 									}
 
-									"incbinstr" |
-									"inchexstr" =>
+									let digit = match c.to_digit(1 << bits_per_char)
 									{
-										let chars = fileserver.get_chars(
-											info.report.clone(),
-											&new_filename,
-											Some(&info.span))
-											.map_err(|_| true)?;
-
-										let mut bitvec = util::BitVec::new();
-
-										let bits_per_char = match name.as_ref()
+										Some(digit) => digit,
+										None =>
 										{
-											"incbinstr" => 1,
-											"inchexstr" => 4,
-											_ => unreachable!(),
-										};
-										
-										for c in chars
-										{
-											if syntax::is_whitespace(c) ||
-												c == '_' ||
-												c == '\r' || c == '\n'
-											{
-												continue;
-											}
-
-											let digit = match c.to_digit(1 << bits_per_char)
-											{
-												Some(digit) => digit,
-												None =>
-												{
-													info.report.error_span(
-														"invalid character in file contents",
-														&info.span);
-													return Err(true);
-												}
-											};
-											
-											for i in 0..bits_per_char
-											{
-												let bit = (digit & (1 << (bits_per_char - 1 - i))) != 0;
-												bitvec.write(bitvec.len(), bit);
-											}
+											info.report.error_span(
+												"invalid character in file contents",
+												&info.span);
+											return Err(true);
 										}
-
-										// TODO: Optimize conversion to bigint
-										Ok(expr::Value::make_integer(bitvec.as_bigint()))
+									};
+									
+									for i in 0..bits_per_char
+									{
+										let bit = (digit & (1 << (bits_per_char - 1 - i))) != 0;
+										bitvec.write(bitvec.len(), bit);
 									}
-
-									_ => unreachable!()
 								}
 
+								// TODO: Optimize conversion to bigint
+								Ok(expr::Value::make_integer(bitvec.as_bigint()))
 							}
-							
-							_ =>
-							{
-								info.report.error_span("wrong arguments", info.span);
-								return Err(true);
-							}
+
+							_ => unreachable!()
 						}
 					}
 
@@ -1116,5 +1260,129 @@ impl State
 			
 			_ => unreachable!()
 		}
+	}
+
+
+	fn eval_asm(
+		&self,
+		ctx: &Context,
+		info: &mut expr::EvalAsmInfo,
+		fileserver: &dyn util::FileServer)
+		-> Result<expr::Value, ()>
+	{
+		let mut result = util::BigInt::new(0, Some(0));
+		
+		let mut parser = syntax::Parser::new(Some(info.report.clone()), info.tokens);
+
+		//println!("asm block `{}`", fileserver.get_excerpt(&parser.get_full_span()));
+		
+		while !parser.is_over()
+		{
+			// Substitute `{x}` occurrences with tokens from the argument
+			let mut subs_parser = parser.slice_until_linebreak_over_nested_braces();
+			let subparser_span = subs_parser.get_full_span();
+
+			//println!("> instr `{}`", fileserver.get_excerpt(&subparser_span));
+
+			let mut subs_tokens: Vec<syntax::Token> = Vec::new();
+			while !subs_parser.is_over()
+			{
+				if let Some(open_token) = subs_parser.maybe_expect(syntax::TokenKind::BraceOpen)
+				{
+					let arg_name_token = subs_parser.expect(syntax::TokenKind::Identifier)?;
+					let arg_name = arg_name_token.excerpt.as_ref().unwrap();
+
+					let token_sub = match info.args.get_token_sub(&arg_name)
+					{
+						None =>
+						{
+							info.report.error_span("unknown argument", &arg_name_token.span);
+							return Err(());
+						}
+						Some(t) => t
+					};
+
+					let close_token = subs_parser.expect(syntax::TokenKind::BraceClose)?;
+					let sub_span = open_token.span.join(&close_token.span);
+
+					for token in token_sub
+					{
+						let mut sub_token = token.clone();
+						sub_token.span = sub_span.clone();
+						subs_tokens.push(sub_token);
+					}
+				}
+				else
+				{
+					subs_tokens.push(subs_parser.advance());
+				}
+			}
+
+			let mut subparser = syntax::Parser::new(Some(info.report.clone()), &subs_tokens);
+			subparser.suppress_reports();
+
+			//println!("> after subs `{:?}`", subs_tokens);
+		
+			let matches = asm::parser::match_rule_invocation(
+				&self,
+				subparser,
+				ctx.clone(),
+				fileserver,
+				info.report.clone())?;
+
+			let value = self.resolve_rule_invocation(
+				info.report.clone(),
+				&matches,
+				fileserver,
+				true,
+				info.args)?;
+				
+			let (bigint, size) = match value
+			{
+				expr::Value::Integer(bigint) =>
+				{
+					match bigint.size
+					{
+						Some(size) => (bigint, size),
+						None =>
+						{
+							info.report.error_span(
+								"cannot infer size of instruction",
+								&subparser_span);
+
+							return Err(());
+						}
+					}
+				}
+
+				_ =>
+				{
+					info.report.error_span(
+						"wrong type returned from instruction",
+						&subparser_span);
+
+					return Err(());
+				}
+			};
+
+			if size > 0
+			{
+				if result.size.unwrap() == 0
+				{
+					result = bigint;
+				}
+				else
+				{
+					result = result.concat(
+						(result.size.unwrap(), 0),
+						&bigint,
+						(size, 0));
+				}
+			}
+
+			parser.expect_linebreak()?;
+		}
+
+		Ok(expr::Value::make_integer(result))
 	}
 }

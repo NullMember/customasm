@@ -1,13 +1,14 @@
 # customasm
 This is an assembler that takes custom, user-defined instruction sets
 and uses them to assemble source files.  
-This can be useful if you'd like to test out a new virtual machine's bytecode,
-or even if you're eager to write programs for that new processor architecture 
-you just implemented in FPGA!
+It can be useful, for example, if you're trying to test the bytecode of a new virtual machine,
+or if you're eager to write programs for that new microprocessor architecture 
+you just implemented in an FPGA chip!
 
 [![crates.io][badge-cratesio-img]][badge-cratesio-url]
 [![Latest Release][badge-latest-img]][badge-latest-url]
 [![Releases][badge-downloads-img]][badge-downloads-url]
+
 [![Discord][badge-discord-img]][badge-discord-url]
 
 [badge-cratesio-img]: https://img.shields.io/crates/v/customasm
@@ -19,21 +20,23 @@ you just implemented in FPGA!
 [badge-downloads-img]: https://img.shields.io/github/downloads/hlorenzi/customasm/total
 [badge-downloads-url]: https://github.com/hlorenzi/customasm/releases
 
-[badge-discord-img]: https://img.shields.io/discord/394999035540275222?label=Discord&logo=discord
+[badge-discord-img]: https://img.shields.io/discord/394999035540275222?label=Join%20the%20Discord%20server!&logo=discord
 [badge-discord-url]: https://discord.com/invite/pXeDXGD
 
-[📱 Try it right now on your browser!](https://hlorenzi.github.io/customasm/web/)
- 
-[📖 Check out the User Guide](https://github.com/hlorenzi/customasm/wiki/User-Guide)
-for instructions!
+[🖥️ Try it right now on your browser!](https://hlorenzi.github.io/customasm/web/)
 
-[🕹 Check out an example project](/examples/nes/) which targets the NES!
+[🕹️ Check out an example project](/examples/nes/) which targets the NES!
 
-[❤️ A big thank you to my supporters!](https://accounts.hlorenzi.com/supporters)
+[📜 Check out the changelog](/CHANGELOG.md) for new features!
 
-## New v0.11
+[⌨️ Install the VSCode syntax highlight extension!](https://marketplace.visualstudio.com/items?itemName=hlorenzi.customasm-vscode)
 
-[📖 Check out instructions for migration from older versions to v0.11!](https://github.com/hlorenzi/customasm/wiki/Migrating-to-v0.11)
+[❤️ Support me!](https://accounts.hlorenzi.com/supporters)
+
+## Documentation
+
+[📚 Check out the Documentation](https://github.com/hlorenzi/customasm/wiki/User-Guide)
+for advanced features and a how-to guide!
 
 ## Installation
 
@@ -47,6 +50,10 @@ You can also download pre-built executables from the
 You can compile from source yourself by first cloning the repository and
 then simply running `cargo build`.
 There's also a battery of tests available at `cargo test`.
+
+## Upgrade to v0.11
+
+[📖 Check out instructions for migration from older versions to v0.11!](https://github.com/hlorenzi/customasm/wiki/Migrating-to-v0.11)
 
 ## Example
 

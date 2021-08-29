@@ -24,12 +24,12 @@ pub struct Report
 
 
 #[derive(Clone)]
-struct Message
+pub struct Message
 {
 	pub descr: String,
 	pub kind: MessageKind,
 	pub span: Option<Span>,
-	pub inner: Option<Box<Message>>
+	pub inner: Vec<Message>,
 }
 
 
@@ -55,6 +55,99 @@ pub struct ReportParentGuard
 }
 
 
+impl Message
+{
+	pub fn error<S>(descr: S) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Error,
+			span: None,
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn error_span<S>(descr: S, span: &Span) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Error,
+			span: Some(span.clone()),
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn warning<S>(descr: S) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Warning,
+			span: None,
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn warning_span<S>(descr: S, span: &Span) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Warning,
+			span: Some(span.clone()),
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn note<S>(descr: S) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Note,
+			span: None,
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn note_span<S>(descr: S, span: &Span) -> Message
+	where S: Into<String>
+	{
+		Message
+		{
+			descr: descr.into(),
+			kind: MessageKind::Note,
+			span: Some(span.clone()),
+			inner: Vec::new()
+		}
+	}
+	
+	
+	pub fn len_with_inner(&self) -> usize
+	{
+		let mut count = 1;
+		for msg in &self.inner
+		{
+			count += msg.len_with_inner();
+		}
+
+		count
+	}
+}
+
+
 impl Report
 {
 	pub fn new() -> Report
@@ -69,72 +162,105 @@ impl Report
 
 	fn transfer(&mut self, other: &mut Report)
 	{
-		other.messages.extend(self.messages.iter().cloned());
+		for msg in &self.messages
+		{
+			other.message(msg.clone());
+		}
 	}
 	
 	
 	fn message(&mut self, mut msg: Message)
 	{
 		for parent in self.parents.iter().rev()
-			{ msg = Message{ descr: parent.descr.clone(), kind: parent.kind, span: parent.span.clone(), inner: Some(Box::new(msg)) }; }
+		{
+			msg = Message
+			{
+				descr: parent.descr.clone(),
+				kind: parent.kind,
+				span: parent.span.clone(),
+				inner: vec![msg]
+			};
+		}
 		
 		self.messages.push(msg);
+	}
+	
+	
+	fn push_multiple(&mut self, mut msgs: Vec<Message>)
+	{
+		for parent in self.parents.iter().rev()
+		{
+			let msg = Message
+			{
+				descr: parent.descr.clone(),
+				kind: parent.kind,
+				span: parent.span.clone(),
+				inner: msgs
+			};
+
+			msgs = vec![msg];
+		}
+		
+		for msg in msgs
+		{
+			self.messages.push(msg);
+		}
 	}
 	
 	
 	pub fn error<S>(&mut self, descr: S)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Error, span: None, inner: None };
-		self.message(msg);
+		self.message(Message::error(descr));
 	}
 	
 	
 	pub fn error_span<S>(&mut self, descr: S, span: &Span)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Error, span: Some(span.clone()), inner: None };
-		self.message(msg);
+		self.message(Message::error_span(descr, span));
 	}
 	
 	
 	pub fn warning<S>(&mut self, descr: S)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Warning, span: None, inner: None };
-		self.message(msg);
+		self.message(Message::warning(descr));
 	}
 	
 	
 	pub fn warning_span<S>(&mut self, descr: S, span: &Span)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Warning, span: Some(span.clone()), inner: None };
-		self.message(msg);
+		self.message(Message::warning_span(descr, span));
 	}
 	
 	
 	pub fn note<S>(&mut self, descr: S)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Note, span: None, inner: None };
-		self.message(msg);
+		self.message(Message::note(descr));
 	}
 	
 	
 	pub fn note_span<S>(&mut self, descr: S, span: &Span)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Note, span: Some(span.clone()), inner: None };
-		self.message(msg);
+		self.message(Message::note_span(descr, span));
 	}
 	
 	
 	pub fn push_parent<S>(&mut self, descr: S, span: &Span)
 	where S: Into<String>
 	{
-		let msg = Message{ descr: descr.into(), kind: MessageKind::Error, span: Some(span.clone()), inner: None };
-		self.parents.push(msg);
+		self.parents.push(Message::error_span(descr, span));
+	}
+	
+	
+	pub fn push_parent_note<S>(&mut self, descr: S, span: &Span)
+	where S: Into<String>
+	{
+		self.parents.push(Message::note_span(descr, span));
 	}
 	
 	
@@ -147,6 +273,18 @@ impl Report
 	pub fn len(&self) -> usize
 	{
 		self.messages.len()
+	}
+	
+	
+	pub fn len_with_inner(&self) -> usize
+	{
+		let mut count = 0;
+		for msg in &self.messages
+		{
+			count += msg.len_with_inner();
+		}
+
+		count
 	}
 	
 	
@@ -197,15 +335,12 @@ impl Report
 	
 	fn msg_has_error_at(&self, msg: &Message, fileserver: &dyn FileServer, filename: &str, kind: MessageKind, line: usize, error_excerpt: &str) -> bool
 	{
-		match msg.inner
+		for inner in &msg.inner
 		{
-			Some(ref inner) => match self.msg_has_error_at(&inner, fileserver, filename, kind, line, error_excerpt)
+			if self.msg_has_error_at(&inner, fileserver, filename, kind, line, error_excerpt)
 			{
-				true => return true,
-				false => { }
+				return true;
 			}
-			
-			None => { }
 		}
 
 		if msg.kind != kind
@@ -271,10 +406,9 @@ impl Report
 
 		self.print_msg_src(writer, fileserver, msg, 0);
 		
-		match msg.inner
+		for inner in &msg.inner
 		{
-			Some(ref inner) => self.print_msg(writer, fileserver, &inner, indent + 1),
-			None => { }
+			self.print_msg(writer, fileserver, &inner, indent + 1);
 		}
 	}
 	
@@ -425,6 +559,12 @@ impl RcReport
 	{
 		Rc::try_unwrap(self.report).ok().unwrap().into_inner()
 	}
+
+
+	pub fn push_multiple(&self, msgs: Vec<Message>)
+	{
+		self.report.borrow_mut().push_multiple(msgs);
+	}
 	
 	
 	pub fn error<S>(&self, descr: S)
@@ -479,6 +619,16 @@ impl RcReport
 		guard
 	}
 	
+	pub fn push_parent_note<S>(&self, descr: S, span: &Span) -> ReportParentGuard
+	where S: Into<String>
+	{
+		let guard = ReportParentGuard{ report: self.clone() };
+		
+		self.report.borrow_mut().push_parent_note(descr, span);
+		
+		guard
+	}
+
 	
 	fn pop_parent(&self)
 	{
@@ -501,6 +651,12 @@ impl RcReport
 	pub fn len(&self) -> usize
 	{
 		self.report.borrow().len()
+	}
+	
+	
+	pub fn len_with_inner(&self) -> usize
+	{
+		self.report.borrow().len_with_inner()
 	}
 	
 	
