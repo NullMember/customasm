@@ -4,7 +4,6 @@ use crate::*;
 pub struct ExpressionParser<'a, 'parser: 'a>
 {
 	parser: &'a mut syntax::Parser<'parser>,
-	//rule_params: Option<&'a [RuleParameter]>,
 }
 
 
@@ -14,23 +13,16 @@ impl expr::Expr
 	{
 		ExpressionParser::new(parser).parse_expr()
 	}
-
-
-	/*pub fn parse_for_rule(parser: &mut Parser, rule_params: &[RuleParameter]) -> Result<expr::Expr, ()>
-	{
-		ExpressionParser::new(parser, Some(rule_params)).parse_expr()
-	}*/
 }
 
 
 impl<'a, 'parser> ExpressionParser<'a, 'parser>
 {
-	pub fn new(parser: &'a mut syntax::Parser<'parser>/*, rule_params: Option<&'a [RuleParameter]>*/) -> ExpressionParser<'a, 'parser>
+	pub fn new(parser: &'a mut syntax::Parser<'parser>) -> ExpressionParser<'a, 'parser>
 	{
 		ExpressionParser
 		{
 			parser,
-			//rule_params,
 		}
 	}
 	
@@ -272,6 +264,9 @@ impl<'a, 'parser> ExpressionParser<'a, 'parser>
 	{
 		let inner = self.parse_size()?;
 		
+		if self.parser.next_is_linebreak()
+			{ return Ok(inner); }
+
 		let tk_open = match self.parser.maybe_expect(syntax::TokenKind::BracketOpen)
 		{
 			Some(tk) => tk,
@@ -298,13 +293,16 @@ impl<'a, 'parser> ExpressionParser<'a, 'parser>
 			return Err(());
 		}
 			
-		Ok(expr::Expr::BitSlice(span, slice_span, leftmost, rightmost, Box::new(inner)))
+		Ok(expr::Expr::BitSlice(span, slice_span, leftmost + 1, rightmost, Box::new(inner)))
 	}
 	
 	
 	fn parse_size(&mut self) -> Result<expr::Expr, ()>
 	{
 		let inner = self.parse_unary()?;
+		
+		if self.parser.next_is_linebreak()
+			{ return Ok(inner); }
 		
 		let tk_grave = match self.parser.maybe_expect(syntax::TokenKind::Grave)
 		{
@@ -321,16 +319,7 @@ impl<'a, 'parser> ExpressionParser<'a, 'parser>
 		let span = inner.span().join(&tk_size.span);
 		let size_span = tk_grave.span.join(&tk_size.span);
 
-		if size < 1
-		{
-			if let Some(ref report) = self.parser.report
-			{
-				report.error_span("invalid size specifier", &size_span);
-				return Err(());
-			}
-		}
-
-		Ok(expr::Expr::BitSlice(span, size_span, size - 1, 0, Box::new(inner)))
+		Ok(expr::Expr::BitSlice(span, size_span, size, 0, Box::new(inner)))
 	}
 	
 	
@@ -391,12 +380,15 @@ impl<'a, 'parser> ExpressionParser<'a, 'parser>
 			
 		else if self.parser.next_is(0, syntax::TokenKind::String)
 			{ self.parse_string() }
+	
+		else if self.parser.next_is(0, syntax::TokenKind::KeywordAsm)
+			{ self.parse_asm() }
 			
 		else
 		{
-			let span = self.parser.prev().span.after();
 			if let Some(ref report) = self.parser.report
 			{
+				let span = self.parser.get_span_after_prev();
 				report.error_span("expected expression", &span);
 			}
 			Err(())
@@ -517,6 +509,23 @@ impl<'a, 'parser> ExpressionParser<'a, 'parser>
 		let expr = expr::Expr::Literal(
 			tk_str.span.clone(),
 			expr::Value::Integer(util::BigInt::new_from_str(&string)));
+
+		Ok(expr)
+	}
+	
+	
+	fn parse_asm(&mut self) -> Result<expr::Expr, ()>
+	{
+		let tk_asm = self.parser.expect(syntax::TokenKind::KeywordAsm)?;
+		self.parser.expect(syntax::TokenKind::BraceOpen)?;
+
+		let contents = self.parser.slice_until_token_over_nested_braces(syntax::TokenKind::BraceClose);
+
+		let tk_brace_close = self.parser.expect(syntax::TokenKind::BraceClose)?;
+
+		let expr = expr::Expr::Asm(
+			tk_asm.span.clone().join(&tk_brace_close.span),
+			contents.get_cloned_tokens());
 
 		Ok(expr)
 	}

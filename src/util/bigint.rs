@@ -1,7 +1,7 @@
 use num_bigint;
 
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq)]
 pub struct BigInt
 {
     bigint: num_bigint::BigInt,
@@ -133,6 +133,13 @@ impl BigInt
     }
 
 
+    pub fn checked_to_isize(&self) -> Option<isize>
+    {
+        use num_traits::ToPrimitive;
+        self.bigint.to_isize()
+    }
+
+
     pub fn checked_div(&self, rhs: &BigInt) -> Option<BigInt>
     {
         self.bigint.checked_div(&rhs.bigint).map(|res| res.into())
@@ -185,8 +192,8 @@ impl BigInt
     
     pub fn concat(&self, lhs_slice: (usize, usize), rhs: &BigInt, rhs_slice: (usize, usize)) -> BigInt
     {
-        let lhs_size = lhs_slice.0 + 1 - lhs_slice.1;
-        let rhs_size = rhs_slice.0 + 1 - rhs_slice.1;
+        let lhs_size = lhs_slice.0 - lhs_slice.1;
+        let rhs_size = rhs_slice.0 - rhs_slice.1;
         let lhs = self.slice(lhs_slice.0, lhs_slice.1).shl(rhs_size);
         let rhs = rhs.slice(rhs_slice.0, rhs_slice.1);
 
@@ -202,12 +209,26 @@ impl BigInt
         use num_traits::One;
 
         let mut mask = num_bigint::BigInt::zero();
-        for _ in 0..(left - right + 1)
+        for _ in 0..(left - right)
             { mask = (mask << 1) + num_bigint::BigInt::one(); }
         
-        let mut result = &self.shr(right) & &mask.into();
-        result.size = Some(left + 1 - right);
+        let shifted_mask = BigInt::new(mask, None).shl(right);
+        let mut result = (self & &shifted_mask).shr(right);
+        result.size = Some(left - right);
         result
+    }
+
+
+    pub fn convert_le(&self) -> BigInt
+    {
+        let mut be_bytes = self.bigint.to_bytes_le().1;
+        while be_bytes.len() < self.size.unwrap() / 8
+        {
+            be_bytes.push(0);
+        }
+
+        let new_value = num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &be_bytes);
+        BigInt::new(new_value, self.size)
     }
 
 
@@ -361,6 +382,15 @@ impl std::ops::BitXor for &BigInt
     fn bitxor(self, rhs: &BigInt) -> Self::Output
     {
         self.combine_bits(rhs, |a, b| a ^ b).into()
+    }
+}
+
+
+impl std::cmp::PartialEq for BigInt
+{
+    fn eq(&self, rhs: &BigInt) -> bool
+    {
+        self.bigint.partial_cmp(&rhs.bigint) == Some(std::cmp::Ordering::Equal)
     }
 }
 

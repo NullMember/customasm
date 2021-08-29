@@ -10,37 +10,82 @@ pub fn parse_rule_invocation(state: &mut asm::parser::State)
     let mut subparser = state.parser.slice_until_linebreak();
     subparser.suppress_reports();
 
+    let ctx = state.asm_state.get_ctx(&state);
+
+    if let Ok(invocation) = match_rule_invocation(
+        &mut state.asm_state,
+        subparser,
+        ctx,
+        state.fileserver,
+        state.report.clone())
+    {
+        let bankdata = state.asm_state.get_bankdata(state.asm_state.cur_bank);
+        bankdata.check_writable(&state.asm_state, state.report.clone(), &invocation.span)?;
+        
+        let bankdata = state.asm_state.get_bankdata_mut(state.asm_state.cur_bank);
+        bankdata.push_invocation(invocation);
+    }
+
+    state.parser.expect_linebreak()?;
+    Ok(())
+}
+
+
+pub fn match_rule_invocation(
+    asm_state: &asm::State,
+    subparser: syntax::Parser,
+    ctx: asm::Context,
+    fileserver: &dyn util::FileServer,
+    report: diagn::RcReport)
+    -> Result<asm::Invocation, ()>
+{
     if DEBUG
     {
         println!("");
         println!(
             "=== parse rule invocation `{}` ===",
-            state.fileserver.get_excerpt(&subparser.get_full_span()));
+            fileserver.get_excerpt(&subparser.get_full_span()));
     }
 
-    let candidates = match_active_rulesets(state, &mut subparser)?;
+    let mut candidates = match_active_rulesets(asm_state, &subparser, fileserver, report.clone())?;
     if candidates.len() != 0
     {
-        //candidates.sort_by(|a, b| a.args.len().cmp(&b.args.len()));
+        // Calculate specificity scores
+        for candidate in &mut candidates
+        {
+            candidate.specificity = candidate.calculate_specificity_score(&asm_state);
+        }
 
+        // Sort candidates by specificity score
+        candidates.sort_by(|a, b| b.specificity.cmp(&a.specificity));
+        
         if DEBUG
         {
             println!("");
             println!("final candidates:");
             for candidate in &candidates
             {
-                let rule_group = &state.asm_state.rulesets[candidate.rule_ref.ruleset_ref.index];
+                let rule_group = &asm_state.rulesets[candidate.rule_ref.ruleset_ref.index];
                 let rule = &rule_group.rules[candidate.rule_ref.index];
 
                 println!(
                     "  `{}`",
-                    state.fileserver.get_excerpt(&rule.span));
+                    fileserver.get_excerpt(&rule.span));
             }
         }
 
+        // Only keep candidates with the maximum specificity score
+        let mut max_specificity = candidates[0].specificity;
+        for candidate in &candidates[1..]
+        {
+            max_specificity = std::cmp::max(max_specificity, candidate.specificity);
+        }
+
+        candidates.retain(|c| c.specificity == max_specificity);
+
         let mut invocation = asm::Invocation
         {
-            ctx: state.asm_state.get_ctx(&state),
+            ctx,
             size_guess: 0,
             span: subparser.get_full_span(),
             kind: asm::InvocationKind::Rule(asm::RuleInvocation
@@ -49,13 +94,14 @@ pub fn parse_rule_invocation(state: &mut asm::parser::State)
             })
         };
         
-        let resolved = state.asm_state.resolve_rule_invocation(
-            state.report.clone(),
+        let resolved = asm_state.resolve_rule_invocation(
+            report.clone(),
             &invocation,
-            state.fileserver,
-            false);
+            fileserver,
+            false,
+            &mut expr::EvalContext::new());
 
-        //println!("{} = {:?}", state.fileserver.get_excerpt(&invocation.span), &resolved);
+        //println!("{} = {:?}", fileserver.get_excerpt(&invocation.span), &resolved);
 
         // TODO: can provide an exact guess even if resolution fails,
         // if we have an exact candidate, and
@@ -73,32 +119,27 @@ pub fn parse_rule_invocation(state: &mut asm::parser::State)
             _ => 0
         };
 
-        //println!("{} = {}", state.fileserver.get_excerpt(&invocation.span), invocation.size_guess);
+        //println!("{} = {}", fileserver.get_excerpt(&invocation.span), invocation.size_guess);
 
-        let bankdata = state.asm_state.get_bankdata(state.asm_state.cur_bank);
-        bankdata.check_writable(&state.asm_state, state.report.clone(), &invocation.span)?;
-        
-        let bankdata = state.asm_state.get_bankdata_mut(state.asm_state.cur_bank);
-        bankdata.push_invocation(invocation);
+        return Ok(invocation);
     }
 
-    state.parser.expect_linebreak()?;
-
-    Ok(())
+    Err(())
 }
 
 
 pub fn match_active_rulesets(
-    state: &asm::parser::State,
-    subparser: &mut syntax::Parser)
+    asm_state: &asm::State,
+    subparser: &syntax::Parser,
+    fileserver: &dyn util::FileServer,
+    report: diagn::RcReport)
     -> Result<Vec<asm::RuleInvocationCandidate>, ()>
 {
     let mut candidates = Vec::new();
 
-    for ruleset_ref in &state.asm_state.active_rulesets
+    for ruleset_ref in &asm_state.active_rulesets
     {
-        let mut subparser_clone = subparser.clone();
-        if let Ok(subcandidates) = match_ruleset(state, *ruleset_ref, &mut subparser_clone, true)
+        if let Ok(subcandidates) = match_ruleset(asm_state, *ruleset_ref, &subparser, true, fileserver, report.clone())
         {
             for candidate in subcandidates
             {
@@ -109,12 +150,12 @@ pub fn match_active_rulesets(
 
     if candidates.len() == 0
     {
-        state.report.error_span("no match for instruction found", &subparser.get_full_span());
+        report.error_span("no match for instruction found", &subparser.get_full_span());
     }
 
     //println!(
     //    "rule candidates for `{}`:\n{:#?}",
-    //    state.fileserver.get_excerpt(&subparser.get_full_span()),
+    //    fileserver.get_excerpt(&subparser.get_full_span()),
     //    candidates);
 
     Ok(candidates)
@@ -122,13 +163,15 @@ pub fn match_active_rulesets(
 
 
 pub fn match_ruleset<'a>(
-    state: &asm::parser::State,
+    asm_state: &asm::State,
     ruleset_ref: asm::RulesetRef,
-    subparser: &mut syntax::Parser<'a>,
-    must_consume_all_tokens: bool)
+    subparser: &syntax::Parser<'a>,
+    must_consume_all_tokens: bool,
+    fileserver: &dyn util::FileServer,
+    report: diagn::RcReport)
     -> Result<Vec<(asm::RuleInvocationCandidate, syntax::Parser<'a>)>, ()>
 {
-    let rule_group = &state.asm_state.rulesets[ruleset_ref.index];
+    let rule_group = &asm_state.rulesets[ruleset_ref.index];
 
     let mut candidates = Vec::new();
 
@@ -140,17 +183,18 @@ pub fn match_ruleset<'a>(
             index,
         };
 
-        let mut subparser_clone = subparser.clone();
-
-        if let Ok(candidate) = match_rule(state, rule_ref, &mut subparser_clone)
+        if let Ok(subcandidates) = match_rule(asm_state, rule_ref, subparser, fileserver, report.clone())
         {
             //println!(
             //    "finish pattern with parser at `{}`",
-            //    state.fileserver.get_excerpt(&subparser_clone.get_next_spans(10)));
+            //    fileserver.get_excerpt(&subparser_clone.get_next_spans(10)));
         
-            if !must_consume_all_tokens || subparser_clone.is_over()
+            for subcandidate in subcandidates
             {
-                candidates.push((candidate, subparser_clone));
+                if !must_consume_all_tokens || subcandidate.1.is_over()
+                {
+                    candidates.push(subcandidate);
+                }
             }
         }
     }
@@ -159,174 +203,257 @@ pub fn match_ruleset<'a>(
 }
 
 
-pub fn match_rule(
-    state: &asm::parser::State,
-    rule_ref: asm::RuleRef,
-    subparser: &mut syntax::Parser)
-    -> Result<asm::RuleInvocationCandidate, ()>
+#[derive(Clone)]
+struct ParsingBranch<'a>
 {
-    let rule_group = &state.asm_state.rulesets[rule_ref.ruleset_ref.index];
+    args: Vec<asm::RuleInvocationArgument>,
+    token_args: Vec<Option<Vec<syntax::Token>>>,
+    parser: syntax::Parser<'a>,
+    dead: bool,
+}
+
+
+pub fn match_rule<'a>(
+    asm_state: &asm::State,
+    rule_ref: asm::RuleRef,
+    subparser: &syntax::Parser<'a>,
+    fileserver: &dyn util::FileServer,
+    report: diagn::RcReport)
+    -> Result<Vec<(asm::RuleInvocationCandidate, syntax::Parser<'a>)>, ()>
+{
+    let rule_group = &asm_state.rulesets[rule_ref.ruleset_ref.index];
     let rule = &rule_group.rules[rule_ref.index];
 
-    let mut candidate = asm::RuleInvocationCandidate
+    let mut parsing_branches = Vec::new();
+    parsing_branches.push(ParsingBranch
     {
-        rule_ref,
         args: Vec::new(),
-    };
+        token_args: Vec::new(),
+        parser: subparser.clone(),
+        dead: false,
+    });
     
     if DEBUG
     {
         println!("");
         println!(
             "> try match rule `{}`",
-            state.fileserver.get_excerpt(&rule.span));
+            fileserver.get_excerpt(&rule.span));
         println!(
             "  parser at `{}`",
-            state.fileserver.get_excerpt(&subparser.get_next_spans(100)));
+            fileserver.get_excerpt(&subparser.get_next_spans(100)));
     }
 
     for (index, part) in rule.pattern.iter().enumerate()
     {
-        match part
+        parsing_branches.retain(|b| !b.dead);
+        if parsing_branches.len() == 0
         {
-            asm::PatternPart::Exact(c) =>
+            break;
+        }
+
+        let mut new_branches = Vec::new();
+        
+        for (branch_index, branch) in parsing_branches.iter_mut().enumerate()
+        {
+            match part
             {
-                if DEBUG
+                asm::PatternPart::Exact(c) =>
                 {
-                    println!("- try match exact {}", c);
-                }
-                
-                if subparser.next_partial().to_ascii_lowercase() != *c
-                {
-                    return Err(());
-                }
-
-                if DEBUG
-                {
-                    println!("  matched!");
-                }
-
-                subparser.advance_partial();
-            }
-
-            asm::PatternPart::Parameter(param_index) =>
-            {
-                let param = &rule.parameters[*param_index];
-
-                match param.typ
-                {
-                    asm::PatternParameterType::Unspecified |
-                    asm::PatternParameterType::Unsigned(_) |
-                    asm::PatternParameterType::Signed(_) |
-                    asm::PatternParameterType::Integer(_) =>
+                    if DEBUG
                     {
+                        println!("- branch {}, try match exact `{}`", branch_index, c);
+                    }
+                    
+                    if branch.parser.next_partial().to_ascii_lowercase() != *c
+                    {
+                        branch.dead = true;
+                    }
+                    else
+                    {
+                        branch.parser.advance_partial();
+
                         if DEBUG
                         {
-                            println!("- try match expr");
-                        }
-                        
-                        if subparser.is_at_partial()
-                        {
-                            match subparser.maybe_expect_partial_usize()
-                            {
-                                Some(value) =>
-                                {
-                                    let expr = expr::Value::make_integer(value).make_literal();
-                                    candidate.args.push(asm::RuleInvocationArgument::Expression(expr));
-                                }
-                                None => return Err(())
-                            }
-                        }
-                        else
-                        {
-                            let mut expr_parser = subparser.clone();
-                            let mut expr_using_slice = false;
-
-                            let next_part = rule.pattern.get(index + 1);
-
-                            if let Some(asm::PatternPart::Exact(next_part_char)) = next_part
-                            {
-                                if let Some(slice_parser) = subparser.slice_until_char_or_nesting(*next_part_char)
-                                {
-                                    expr_parser = slice_parser;
-                                    expr_using_slice = true;
-                                }
-                            }
-
-                            if DEBUG
-                            {
-                                println!(
-                                    "  parser {}at `{}`",
-                                    if expr_using_slice { "using slice " } else { "" },
-                                    state.fileserver.get_excerpt(&expr_parser.get_next_spans(100)));
-                            }
-
-                            let expr = expr::Expr::parse(&mut expr_parser)?;
-
-                            if expr_using_slice && !expr_parser.is_over()
-                            {
-                                return Err(());
-                            }
-
-                            candidate.args.push(asm::RuleInvocationArgument::Expression(expr));
-
-                            if !expr_using_slice
-                            {
-                                subparser.restore(expr_parser.save());
-                            }
-
-                            if DEBUG
-                            {
-                                println!(
-                                    "  continue with parser at `{}`",
-                                    state.fileserver.get_excerpt(&subparser.get_next_spans(100)));
-                                    
-                                println!("  matched!");
-                            }
+                            println!("  branch {}, exact matched! parser at `{}`",
+                                branch_index,
+                                fileserver.get_excerpt(&branch.parser.get_next_spans(100)));
                         }
                     }
+                }
 
-                    asm::PatternParameterType::Ruleset(rule_group_ref)=>
+                asm::PatternPart::Parameter(param_index) =>
+                {
+                    let param = &rule.parameters[*param_index];
+
+                    match param.typ
                     {
-                        if DEBUG
+                        asm::PatternParameterType::Unspecified |
+                        asm::PatternParameterType::Unsigned(_) |
+                        asm::PatternParameterType::Signed(_) |
+                        asm::PatternParameterType::Integer(_) =>
                         {
-                            println!("- try match subrule {:?}", rule_group_ref);
-                        }
-
-                        let subcandidates = match_ruleset(state, rule_group_ref, subparser, false)?;
-                        if subcandidates.len() == 0
-                        {
-                            return Err(());
-                        }
-
-                        for subcandidate in &subcandidates[1..]
-                        {
-                            if subcandidate.1.get_current_token_index() != subcandidates[0].1.get_current_token_index()
+                            if DEBUG
                             {
-                                state.report.error_span("ambiguous nested ruleset", &subparser.get_full_span());
-                                return Err(());
+                                println!("- branch {}, try match expr", branch_index);
+                            }
+                            
+                            if branch.parser.is_at_partial()
+                            {
+                                match branch.parser.maybe_expect_partial_usize()
+                                {
+                                    Some(value) =>
+                                    {
+                                        let expr = expr::Value::make_integer(value).make_literal();
+                                        branch.args.push(asm::RuleInvocationArgument::Expression(expr));
+                                        branch.token_args.push(None);
+                                    }
+                                    None =>
+                                    {
+                                        branch.dead = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                let mut expr_parser = branch.parser.clone();
+                                let mut expr_using_slice = false;
+
+                                let next_part = rule.pattern.get(index + 1);
+
+                                if let Some(asm::PatternPart::Exact(next_part_char)) = next_part
+                                {
+                                    if let Some(slice_parser) = branch.parser.slice_until_char_or_nesting(*next_part_char)
+                                    {
+                                        expr_parser = slice_parser;
+                                        expr_using_slice = true;
+                                    }
+                                }
+
+                                if DEBUG
+                                {
+                                    println!(
+                                        "  branch {}, parser {}at `{}`",
+                                        branch_index,
+                                        if expr_using_slice { "using slice " } else { "" },
+                                        fileserver.get_excerpt(&expr_parser.get_next_spans(100)));
+                                }
+
+                                let expr = expr::Expr::parse(&mut expr_parser)?;
+
+                                if expr_using_slice && !expr_parser.is_over()
+                                {
+                                    branch.dead = true;
+                                }
+                                else
+                                {
+                                    branch.args.push(asm::RuleInvocationArgument::Expression(expr));
+                                    branch.token_args.push(None);
+
+                                    if !expr_using_slice
+                                    {
+                                        branch.parser.restore(expr_parser.save());
+                                    }
+
+                                    if DEBUG
+                                    {
+                                        println!("  branch {}, expr matched! parser at `{}`",
+                                            branch_index,
+                                            fileserver.get_excerpt(&branch.parser.get_next_spans(100)));
+                                    }
+                                }
                             }
                         }
 
-                        if DEBUG
+                        asm::PatternParameterType::Ruleset(rule_group_ref) =>
                         {
-                            println!("  matched!");
-                        }
+                            if DEBUG
+                            {
+                                println!("- branch {}, try match subrule {:?}", branch_index, rule_group_ref);
+                            }
 
-                        subparser.restore(subcandidates[0].1.save());
-                        
-                        let subcandidates = subcandidates.into_iter().map(|c| c.0).collect();
-                        candidate.args.push(asm::RuleInvocationArgument::NestedRuleset(subcandidates));
+                            let token_start = branch.parser.get_current_token_index();
+
+                            let subcandidates = match_ruleset(
+                                asm_state,
+                                rule_group_ref,
+                                &mut branch.parser,
+                                false,
+                                fileserver,
+                                report.clone())?;
+
+                            if subcandidates.len() != 0
+                            {
+                                if DEBUG
+                                {
+                                    println!("  branch {}, {} subrules matched!", branch_index, subcandidates.len());
+                                }
+
+                                for subcandidate in subcandidates.into_iter()
+                                {
+                                    let token_end = subcandidate.1.get_current_token_index();
+
+                                    let mut args_clone = branch.args.clone();
+                                    args_clone.push(asm::RuleInvocationArgument::NestedRuleset(subcandidate.0));
+
+                                    let mut token_args_clone = branch.token_args.clone();
+                                    token_args_clone.push(Some(branch.parser.get_cloned_tokens_by_index(token_start, token_end)));
+
+                                    new_branches.push(ParsingBranch
+                                    {
+                                        args: args_clone,
+                                        token_args: token_args_clone,
+                                        parser: subcandidate.1,
+                                        dead: false,
+                                    });
+                                }
+                            }
+
+                            branch.dead = true;
+                        }
                     }
                 }
             }
         }
+
+        for new_branch in new_branches.into_iter()
+        {
+            parsing_branches.push(new_branch);
+        }
     }
 
-    if subparser.is_at_partial()
+    if DEBUG
     {
-        return Err(());
+        println!("  end try match rule");
+    }
+    
+    let mut candidates = Vec::new();
+
+    for (branch_index, branch) in parsing_branches.into_iter().enumerate()
+    {
+        if DEBUG
+        {
+            println!("= branch {}{}, candidate parser at `{}`",
+                branch_index,
+                if branch.dead { " (dead)" } else { "" },
+                fileserver.get_excerpt(&branch.parser.get_next_spans(100)));
+        }
+
+        if branch.dead
+        {
+            continue;
+        }
+
+        let candidate = asm::RuleInvocationCandidate
+        {
+            rule_ref,
+            specificity: 0,
+            args: branch.args,
+            token_args: branch.token_args,
+        };
+
+        candidates.push((candidate, branch.parser));
     }
 
-    Ok(candidate)
+    Ok(candidates)
 }
